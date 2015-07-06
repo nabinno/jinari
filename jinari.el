@@ -163,8 +163,8 @@
   "*Hook for customising Jinari.")
 
 (defcustom jinari-express-env nil
-  "Use this to force a value for RAILS_ENV when running jinari.
-Leave this set to nil to not force any value for RAILS_ENV, and
+  "Use this to force a value for EXPRESS_ENV when running jinari.
+Leave this set to nil to not force any value for EXPRESS_ENV, and
 leave this to the environment variables outside of Emacs.")
 
 (defvar jinari-minor-mode-prefixes
@@ -272,27 +272,27 @@ Use `font-lock-add-keywords' in case of `js2-mode' or
                         (when jinari-express-env
                           (list (cons "RAILS_ENV" jinari-express-env)))))
 
-(defun jinari--discover-express-commands ()
-  "Return a list of commands supported by the main express script."
-  (let ((express-script (jinari--express-path)))
-    (when express-script
-      (ruby-compilation-extract-output-matches express-script "^ \\([a-z]+\\)[[:space:]].*$"))))
+(defun jinari--discover-gulp-commands ()
+  "Return a list of commands supported by the main gulp script."
+  (let ((gulp-script (jinari--gulp-path)))
+    (when gulp-script
+      (ruby-compilation-extract-output-matches gulp-script "^ \\([a-z]+\\)[[:space:]].*$"))))
 
-(defvar jinari-express-commands-cache nil
+(defvar jinari-gulp-commands-cache nil
   "Cached values for commands that can be used with 'script/rails' in Rails 3.")
 
-(defun jinari-get-express-commands ()
+(defun jinari-get-gulp-commands ()
   "Return a cached list of commands supported by the main rails script."
-  (when (null jinari-express-commands-cache)
-    (setq jinari-express-commands-cache (jinari--discover-express-commands)))
-  jinari-express-commands-cache)
+  (when (null jinari-gulp-commands-cache)
+    (setq jinari-gulp-commands-cache (jinari--discover-gulp-commands)))
+  jinari-gulp-commands-cache)
 
 (defun jinari-script (&optional script)
   "Select and run SCRIPT from the script/ directory of the express application."
   (interactive)
   (let* ((completions (append (and (file-directory-p (jinari-script-path))
                                    (directory-files (jinari-script-path) nil "^[^.]"))
-                              (jinari-get-express-commands)))
+                              (jinari-get-gulp-commands)))
          (script (or script (jump-completing-read "Script: " completions)))
          (ruby-compilation-error-regexp-alist ;; for jumping to newly created files
           (if (equal script "generate")
@@ -301,12 +301,12 @@ Use `font-lock-add-keywords' in case of `js2-mode' or
                 ("^ +\\(exists\\) +\\([^[:space:]]+\\)" 2 3 nil 0 2)
                 ("^ +\\(conflict\\) +\\([^[:space:]]+\\)" 2 3 nil 0 2))
             ruby-compilation-error-regexp-alist))
-         (script-path (concat (jinari--wrap-express-command script) " ")))
+         (script-path (concat (jinari--wrap-gulp-command script) " ")))
     (when (string-match-p "^\\(db\\)?console" script)
       (error "Use the dedicated jinari function to run this interactive script"))
     (ruby-compilation-run (concat script-path " " (read-from-minibuffer (concat script " ")))
                           nil
-                          (concat "rails " script))))
+                          (concat "gulp " script))))
 
 (defun jinari-test (&optional edit-cmd-args)
   "Run the current ruby function as a test, or run the corresponding test.
@@ -348,14 +348,14 @@ arguments."
           (when (string-match "^test" name)
             name))))))
 
-(defun jinari--express-path ()
-  "Return the path of the 'rails' command, or nil if not found."
-  (let* ((script-rails (expand-file-name "rails" (jinari-script-path)))
-         (bin-rails (expand-file-name "rails" (jinari-bin-path))))
+(defun jinari--gulp-path ()
+  "Return the path of the 'gulp' command, or nil if not found."
+  (let* ((script-gulp (expand-file-name "gulp" (jinari-script-path)))
+         (bin-gulp (expand-file-name "gulp" (jinari-bin-path))))
     (cond
-     ((file-exists-p bin-rails) bin-rails)
-     ((file-exists-p script-rails) script-rails)
-     (t (executable-find "rails")))))
+     ((file-exists-p bin-gulp) bin-gulp)
+     ((file-exists-p script-gulp) script-gulp)
+     (t (executable-find "gulp")))))
 
 (defun jinari--maybe-wrap-with-ruby (command-line)
   "If the first part of COMMAND-LINE is not executable, prepend with ruby."
@@ -363,7 +363,7 @@ arguments."
       command-line
     (concat ruby-compilation-executable " " command-line)))
 
-(defun jinari--wrap-rails-command (command)
+(defun jinari--wrap-gulp-command (command)
   "Given a COMMAND such as 'console', return a suitable command line.
 Where the corresponding script is executable, it will be run
 as-is.  Otherwise, as can be the case on Windows, the command will
@@ -373,7 +373,7 @@ be prepended with `ruby-compilation-executable'."
          (script-command (expand-file-name command script)))
     (if (file-exists-p script-command)
         script-command
-      (concat (jinari--rails-path) " " command))))
+      (concat (jinari--gulp-path) " " command))))
 
 (defun jinari-console (&optional edit-cmd-args)
   "Run a Rails console in a compilation buffer.
@@ -383,12 +383,10 @@ user edit the console command arguments."
   (interactive "P")
   (let* ((default-directory (jinari-root))
          (command (jinari--maybe-wrap-with-ruby
-                   (jinari--wrap-rails-command "console"))))
-
+                   (jinari--wrap-gulp-command "console"))))
     ;; Start console in correct environment.
     (when jinari-express-env
       (setq command (concat command " " jinari-express-env)))
-
     ;; For customization of the console command with prefix arg.
     (setq command (if edit-cmd-args
                       (read-string "Run JavaScript: " (concat command " "))
@@ -451,18 +449,15 @@ errors and source code.  Optional prefix argument EDIT-CMD-ARGS
 lets the user edit the server command arguments."
   (interactive "P")
   (let* ((default-directory (jinari-root))
-         (command (jinari--wrap-rails-command "server")))
-
+         (command (jinari--wrap-gulp-command "serve")))
     ;; Start web server in correct environment.
-    (when jinari-rails-env
-      (setq command (concat command " -e " jinari-rails-env)))
-
+    (when jinari-express-env
+      (setq command (concat command " -e " jinari-express-env)))
     ;; For customization of the web server command with prefix arg.
     (setq command (if edit-cmd-args
                       (read-string "Run JavaScript: " (concat command " "))
                     command))
-
-    (ruby-compilation-run command nil "server"))
+    (ruby-compilation-run command nil "serve"))
   (jinari-launch))
 
 (defun jinari-web-server-restart (&optional edit-cmd-args)
@@ -470,11 +465,19 @@ lets the user edit the server command arguments."
 Optional prefix argument EDIT-CMD-ARGS lets the user edit the
 server command arguments."
   (interactive "P")
-  (let ((jinari-web-server-buffer "*server*"))
+  (let ((jinari-web-server-buffer "*gulp*"))
     (when (get-buffer jinari-web-server-buffer)
       (set-process-query-on-exit-flag (get-buffer-process jinari-web-server-buffer) nil)
       (kill-buffer jinari-web-server-buffer))
     (jinari-web-server edit-cmd-args)))
+
+(defun jinari-generate (type name)
+  "Run the generate command to generate a TYPE called NAME."
+  (let* ((default-directory (jinari-root))
+         (command (jinari--wrap-gulp-command "generate")))
+    (shell-command
+     (jinari--maybe-wrap-with-ruby
+      (concat command " " type " " (read-from-minibuffer (format "create %s: " type) name))))))
 
 (defun jinari-insert-erb-skeleton (no-equals)
   "Insert an erb skeleton at point.
@@ -570,7 +573,7 @@ With optional prefix argument ARG, just run `rgrep'."
 (defun jinari-generate (type name)
   "Run the generate command to generate a TYPE called NAME."
   (let* ((default-directory (jinari-root))
-         (command (jinari--wrap-rails-command "generate")))
+         (command (jinari--wrap-gulp-command "generate")))
     (shell-command
      (jinari--maybe-wrap-with-ruby
       (concat command " " type " " (read-from-minibuffer (format "create %s: " type) name))))))
@@ -734,6 +737,9 @@ and redirects."
       ("src/app/controllers/\\1.js#\\2$"        . "test/functional/\\1_test.js#test_\\2")
       ("src/app/views/\\1/_?\\2\\..*"           . "test/functional/\\1_controller_test.js#test_\\2")
       ("src/app/helpers/\\1_helper.js"          . "test/functional/\\1_controller_test.js")
+      ("src/app/stores/\\1.js#\\2$"             . "test/stores/\\1_test.js#test_\\2")
+      ("src/app/components/\\1.js#\\2$"         . "test/components/\\1/\\2_test.js")
+      ("src/app/utilities/\\1_helper.js"        . "test/utilities/\\1_test.js")
       ("db/migrate/.*create_\\1.js"             . "test/unit/\\1_test.js")
       ("test/functional/\\1_controller_test.js" . "test/unit/\\1_test.js")
       ("test/unit/\\1_test.js"                  . "test/functional/\\1_controller_test.js")
@@ -792,7 +798,12 @@ and redirects."
      t)
     (utility
      "H"
-     (("src/app/utilities/\\1_utility.js" . "src/app/utilities/\\1_utility.js")
+     (("src/app/util/\\1_utility.js"      . "src/app/util/\\1_utility.js")
+      ("test/util/\\1_test.js"            . "src/app/util/\\1_utility.js")
+      ("test/unit/\\1_test.js#test_\\2$"  . "src/app/util/\\1_utility.js#\\2")
+      ("test/unit/\\1_test.js"            . "src/app/util/\\1_utility.js")
+      (t                                  . "src/app/util/")
+      ("src/app/utilities/\\1_utility.js" . "src/app/utilities/\\1_utility.js")
       ("test/utilities/\\1_test.js"       . "src/app/utilities/\\1_utility.js")
       ("test/unit/\\1_test.js#test_\\2$"  . "src/app/utilities/\\1_utility.js#\\2")
       ("test/unit/\\1_test.js"            . "src/app/utilities/\\1_utility.js")
@@ -826,10 +837,11 @@ and redirects."
                              (match-string 1 path)))))
     (client          "F" ((t . "src/client/.*")) nil)
     (server          "B" ((t . "src/server/.*")) nil)
-    (features        "F" ((t . "features/.*feature")) nil)
+    (features        "f" ((t . "features/.*feature")) nil)
     (steps           "S" ((t . "features/step_definitions/.*")) nil)
-    (environment     "e" ((t . "config/environments/")
-                          (t . "src/.*/environment.js")) nil)
+    (environment     "e" ((t . "config/environments/")) nil)
+    (gulp            "g" ((t . "gulpfile.js")
+                          (t . "gulp/")) nil)
     (application     "a" ((t . "config/application.js")
                           (t . "app.js")) nil)
     (routes          "R" ((t . "config/routes.js")
@@ -854,7 +866,7 @@ and redirects."
                           (t . "src/app/assets/scripts/.*")) nil)
     (plugin          "u" ((t . "vendor/plugins/")) nil)
     (mailer          "I" ((t . "src/app/mailers/")) nil)
-    (file-in-project "f" ((t . ".*")) nil)
+    (file-in-project "*" ((t . ".*")) nil)
     (by-context
      ";"
      (((lambda () ;; Find-by-Context
