@@ -206,7 +206,7 @@ leave this to the environment variables outside of Emacs.")
 Optional argument HOME is ignored."
   (let ((default-directory (or dir default-directory)))
     (when (file-directory-p default-directory)
-      (if (file-exists-p (expand-file-name "app.js"))
+      (if (file-exists-p (expand-file-name "gulpfile.js"))
           default-directory
         ;; regexp to match windows roots, tramp roots, or regular posix roots
         (unless (string-match "\\(^[[:alpha:]]:/$\\|^/[^\/]+:/?$\\|^/$\\)" default-directory)
@@ -316,10 +316,10 @@ allowing jumping between errors and source code.  Optional prefix
 argument EDIT-CMD-ARGS lets the user edit the test command
 arguments."
   (interactive "P")
-  (or (jinari-test-function-name)
-      (string-match "test" (or (ruby-add-log-current-method)
-                               (file-name-nondirectory (buffer-file-name))))
-      (jinari-find-test))
+  ;; (or (jinari-test-function-name)
+  ;;     (string-match "test" (or (ruby-add-log-current-method)
+  ;;                              (file-name-nondirectory (buffer-file-name))))
+  ;;     (jinari-find-test))
   (let* ((fn (jinari-test-function-name))
          (path (buffer-file-name))
          (javascript-options (list "-I" (expand-file-name "test" (jinari-root)) path))
@@ -330,15 +330,18 @@ arguments."
          (command (if edit-cmd-args
                       (read-string "Run w/Compilation: " default-command)
                     default-command)))
-    (if path
-        (ruby-compilation-run command javascript-options)
-      (message "no test available"))))
+    ;; (if path
+    ;;     (shell-command command "test")
+    ;;     ;; (ruby-compilation-run command javascript-options)
+    ;;   (message "no test available"))
+    (shell-command command "test"))
+  (jinari-launch))
 
 (defun jinari-test-function-name()
   "Return the name of the test function at point, or nil if not found."
   (save-excursion
     (when (re-search-backward (concat "^[ \t]*\\(def\\|test\\)[ \t]+"
-                                      "\\([\"'].*?[\"']\\|" javascript-symbol-re "*\\)"
+                                      "\\([\"'].*?[\"']\\|" ruby-symbol-re "*\\)"
                                       "[ \t]*") nil t)
       (let ((name (match-string 2)))
         (if (string-match "^[\"']\\(.*\\)[\"']$" name)
@@ -457,7 +460,8 @@ lets the user edit the server command arguments."
     (setq command (if edit-cmd-args
                       (read-string "Run JavaScript: " (concat command " "))
                     command))
-    (ruby-compilation-run command nil "serve"))
+    (shell-command command "serve"))
+    ;; (ruby-compilation-run command nil "serve"))
   (jinari-launch))
 
 (defun jinari-web-server-restart (&optional edit-cmd-args)
@@ -840,10 +844,11 @@ and redirects."
     (features        "f" ((t . "features/.*feature")) nil)
     (steps           "S" ((t . "features/step_definitions/.*")) nil)
     (environment     "e" ((t . "config/environments/")) nil)
-    (gulp            "g" ((t . "gulpfile.js")
+    (gulp            "g" ((t . "gulpfile.es6")
+                          (t . "gulpfile.js")
                           (t . "gulp/")) nil)
-    (application     "a" ((t . "config/application.js")
-                          (t . "app.js")) nil)
+    (application     "a" ((t . "app.js")
+                          (t . "config/application.js")) nil)
     (routes          "R" ((t . "config/routes.js")
                           (t . "src/app/routes.js")) nil)
     (configuration   "n" ((t . "config/")) nil)
